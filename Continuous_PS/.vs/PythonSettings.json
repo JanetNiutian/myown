@@ -1,0 +1,6 @@
+{
+  "TestFramework": "Pytest",
+  "terminal.integrated.env.linux": {
+    "PYTHONPATH": "${workspaceFolder}/av2-api-main/src"
+  }
+}
