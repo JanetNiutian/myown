@@ -1,0 +1,7 @@
+nohup: ignoring input
+Initializing GPR model...
+Computing covariance matrix...
+Model initialized.
+Initialization completed in 2796.05 seconds.
+Prediction completed in 15.05 seconds.
+30.200010828580755 163856.05366996373
