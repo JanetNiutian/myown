@@ -62,53 +62,31 @@ class Node:
 
 
 class KrNode:
-    def __init__(self, node=None):
-        if node is None:
-            self.node = Node(0.0, 0.0, 0.0, 0.0)
-        else:
-            self.node = node
+    def __init__(self, x=0.0, y=0.0, spin=0.0, prob=0.0):
+        # 初始化节点，存储动作和评估值
+        self.x = x
+        self.y = y
+        self.spin = spin
+        self.prob = prob
+        self.parent = None
+        self.children = []
+        self.visits = 0
+        self.eval_value = 0.0
 
     def add_node(self, x, y, spin, prob):
-        return KrNode(self.node.add_node(x, y, spin, prob))
+        # 添加子节点
+        new_node = KrNode(x, y, spin, prob)
+        new_node.parent = self
+        self.children.append(new_node)
+        return new_node
 
-    def is_root(self):
-        return self.node.is_root()
+    def kr_update(self, value):
+        # 更新节点的评估值
+        self.eval_value = value
 
-    def sort_children(self, is_white):
-        self.node.sort_children(is_white)
-
-    def ucb_select(self, is_white, ucb_const):
-        return KrNode(self.node.ucb_select(is_white, ucb_const))
-
-    def get_eval(self, is_white):
-        return self.node.get_eval(is_white)
-
-    def update_eval(self, value):
-        self.node.update_eval(value)
-
-    @property
-    def children(self):
-        return [KrNode(child) for child in self.node.children]
-
-    @property
-    def num_children(self):
-        return len(self.node.children)
-
-    @property
-    def action(self):
-        return self.node.x, self.node.y, self.node.spin
-
-    @property
-    def visits(self):
-        return self.node.visits
-
-    @property
-    def prob(self):
-        return self.node.prob
-
-    @property
-    def parent(self):
-        return KrNode(self.node.parent) if self.node.parent else None
+    def get_eval(self):
+        # 获取节点的评估值
+        return self.eval_value
 
 
 class Player:
