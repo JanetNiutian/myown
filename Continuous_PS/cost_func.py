@@ -9,7 +9,7 @@ import numpy as np
 #     v_magnitude = np.sqrt(forecasted_self[:,3]**2 + forecasted_self[:,4]**2)
 #     comfort_cost = np.sum(np.abs(np.diff(v_magnitude)))
 #     return comfort_cost
-def get_details(forecasted_all,nobjs):
+def get_details_original(forecasted_all,nobjs):
     
     # 提取 x 轴位置、y 轴位置、转向角、x 轴速度、y 轴速度
     x = forecasted_all[:, :, 0]
@@ -37,10 +37,40 @@ def get_details(forecasted_all,nobjs):
 
     return alpha, delta, dot_y, x, y, delta_x, delta_y
 
+def get_details_continuous(history_state,nobjs):
+    # history_state是data【nobjs,110,3】的形式
+
+    # 提取 x 轴位置、y 轴位置、转向角、x 轴速度、y 轴速度
+    x = np.transpose(history_state['agent']['position'][:, 40:50, 0], (1, 0, 2)) # 交换第 1 和第 0 维度
+    y = np.transpose(history_state['agent']['position'][:, 40:50, 1], (1, 0, 2))
+    v_x = np.transpose(history_state['agent']['velocity'][:, 40:50, 0], (1, 0, 2))
+    v_y = np.transpose(history_state['agent']['velocity'][:, 40:50, 1], (1, 0, 2))
+    delta = np.transpose(history_state['agent']['heading'][:, 40:50], (1, 0, 2))
+
+    # 计算加速度
+    # 假设加速度是通过速度变化率计算得到的
+    alpha_x = np.diff(v_x, axis=0, prepend=0)
+    alpha_y = np.diff(v_y, axis=0, prepend=0)
+    alpha = np.sqrt(alpha_x**2 + alpha_y**2)
+
+    # y 轴速度
+    dot_y = v_y
+
+    # 计算车辆之间的 x 轴和 y 轴距离的平均值
+    delta_x = np.zeros((10, nobjs))
+    delta_y = np.zeros((10, nobjs))
+    for t in range(10):
+        for i in range(nobjs):
+            delta_x[t, i] = np.mean([x[t, j] - x[t, i] for j in range(nobjs) if j != i])
+            delta_y[t, i] = np.mean([y[t, j] - y[t, i] for j in range(nobjs) if j != i])
+
+    return alpha, delta, dot_y, x, y, delta_x, delta_y
+
+
 # 缺少偏移车道线那项
 def cost_all(forecasted_all,nobjs):
 
-    alpha, delta, dot_y, x, y, delta_x, delta_y = get_details(forecasted_all,nobjs)
+    alpha, delta, dot_y, x, y, delta_x, delta_y = get_details_continuous(forecasted_all,nobjs)
 
     # 参数
     v0 = 31  #15

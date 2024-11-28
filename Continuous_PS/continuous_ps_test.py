@@ -48,8 +48,13 @@ class KrNode(object): # 在 Python 3 中，所有的类默认都会隐式继承 
         self.init_actions = []  # 存储初始化动作和概率
     def add_init_info(self, init_action_id, init_action_prob): # 将初始化动作及其概率添加到列表中
         self.init_actions.append((init_action_id, init_action_prob))
+        self.q_values[init_action_id] = np.random.random()  # 给每个动作分配一个随机的Q值
     def get_init_info(self, nth): # 获取第 nth 个初始化动作
         return self.init_actions[nth]
+    def get_q_value(self, action_id): # 获取给定动作的Q值
+        return self.q_values.get(action_id, 0.0)  # 默认Q值为0.0
+    def update_q_value(self, action_id, new_q_value): # 更新给定动作的Q值
+        self.q_values[action_id] = new_q_value
 # 行为的定义
 def predict_policy(num):
     # 否则进行预测
@@ -115,25 +120,31 @@ def _selectAction(s, h_s, d, iters):
         _simulate(s, h_s, d)
     
     # 需要换成新的评价指标
+    # 需要存储当前状态的A和Q
+    # 先把候选动作和A定义
     index = np.argmax([Q[(s,tuple(a))] for a in actions])
     a = actions[index]
-    q = Q[(s,tuple(a))] # argmax
     return a
 
 # tMaxRollouts设置是否应该和层深度以及6有关
 # 增加候选action的选取
+# 首先研究k(a,b)和w(b)的定义
 def _simulate(s, h_s, d): 
     if d == 0: # we stop exploring the tree, just estimate Qval here
-        return _rollout(s, h_s, d)  #返回的是q
+        return _value(s, h_s, d)  #返回的是q
     s=tuple(s)
     if s not in Tree:
-        for a in actions:
-            Nsa[(s,tuple(a))], Ns[s], Q[(s,tuple(a))] =  0, 1, 0. # could use expert knowledge as well
         Tree.add(s)
-        # use tMax instead of d: we want to rollout deeper
-        return _rollout(s, h_s,d)
+        node = KrNode()
+        # 假设我们有一个动作概率分布预测，num_init 为 4
+        prediction_p = predict_policy(4)  # 假设预测为 [0.25, 0.25, 0.25, 0.25]
+        prepare_init_actions(node, prediction_p, num_init=4) # 调用 prepare_init_actions 来初始化动作和它们的 Q 值
+        for i in range(len(node.init_actions)):
+            action_id, prob = node.get_init_info(i) # 获得初始化的动作和概率
+            q_value = node.get_q_value(action_id)
+        return _value(s, h_s,d)
 
-    #a = max([(self.Q[(s,a)]+self.c*math.sqrt(math.log(self.Ns[s])/(1e-5 + self.Nsa[(s,a)])), a) for a in self.mdp.actions(s)])[1] # argmax
+    # 下面详细看一下W， K ，E的设置
     qa_tab = ([(Q[(s,tuple(a))]+c*math.sqrt(math.log(Ns[s])/(1e-5 + Nsa[(s,tuple(a))])), a) for a in actions]) # argmax
     index = np.argmax([t[0] for t in qa_tab])
     qbest, a =  qa_tab[index]
@@ -156,14 +167,10 @@ def _simulate(s, h_s, d):
     return q
 
 # rollout替换为直接评估方法
-# def _rollout(s, h_s, d):
-#     if d == 0:
-#         return 0
-#     else:
-#         a = (random.sample(actions, 1))[0]
-#         # print("进行rollout，此时rollout深度为：",d)
-#         sp, h_sp, r = _step(s, h_s, a)
-#         return r + discount * _rollout(sp, h_sp, d-1)
+# 简略成当前场景的cost和未来剩余时常的
+# discount ^ (6-d) * cost
+def _value(s, h_s, d):
+    return cost_all(h_s,nobjs)*discount**(6-d) 
 
 class LowPassFilter:
     def __init__(self, alpha):
