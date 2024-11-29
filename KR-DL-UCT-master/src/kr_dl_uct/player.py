@@ -116,7 +116,7 @@ class Player:
         self.reset(root_env, num_playout)
         root_prediction_p, root_leaf_black_eval = self.predict(root_env)
         self.prepare_init_actions(self.root_node, root_prediction_p)
-        self.root_node.update_eval(root_leaf_black_eval) # 更新当前节点的评估值和访问次数
+        self.root_node.update_wval(root_leaf_black_eval) # 更新当前节点的评估值和访问次数
 
         for _ in range(num_playout):
             cur_env = copy(root_env)

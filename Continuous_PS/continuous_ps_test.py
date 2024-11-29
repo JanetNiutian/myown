@@ -46,15 +46,42 @@ class KrNode(object): # 在 Python 3 中，所有的类默认都会隐式继承 
         self.speed = speed
         self.prob = prob
         self.init_actions = []  # 存储初始化动作和概率
+        self.q_values = {}  # 存储 Q 值
+        self.cov_matrix = np.identity(2)  # 默认协方差矩阵为单位矩阵
+        self.actions = []  # 用于存储当前状态的所有动作集合 A
     def add_init_info(self, init_action_id, init_action_prob): # 将初始化动作及其概率添加到列表中
         self.init_actions.append((init_action_id, init_action_prob))
         self.q_values[init_action_id] = np.random.random()  # 给每个动作分配一个随机的Q值
+        self.actions.append(init_action_id)  # 添加动作到 actions 集合中
     def get_init_info(self, nth): # 获取第 nth 个初始化动作
         return self.init_actions[nth]
     def get_q_value(self, action_id): # 获取给定动作的Q值
-        return self.q_values.get(action_id, 0.0)  # 默认Q值为0.0
+        return self.q_values.get(action_id, 0.0)  # 默认Q值为0.0,如果指定键的值不存在时，返回该默认值
     def update_q_value(self, action_id, new_q_value): # 更新给定动作的Q值
         self.q_values[action_id] = new_q_value
+    def get_actions(self):
+        """ 返回当前 KrNode 中存储的所有动作 """
+        return self.actions
+    def update_cov_matrix(self, actions, num_samples=5):
+        """
+        更新协方差矩阵。
+        :param actions: 动作的集合。
+        :param num_samples: 用于计算协方差矩阵的样本数量。
+        """
+        # 计算动作对之间的协方差
+        action_matrix = np.array([a for a in actions])  # 假设 actions 是一个 numpy 数组
+        sample_mean = np.mean(action_matrix, axis=0)
+        diff = action_matrix - sample_mean
+        self.cov_matrix = np.cov(diff.T)  # 计算协方差矩阵
+    def get_max_q_action(self):
+        """ 找到 Q 值最大的动作 """
+        if not self.q_values:
+            return None  # 如果没有动作，返回 None
+        # 获取 Q 值最大的动作和对应的 Q 值
+        max_action_id = max(self.q_values, key=self.q_values.get)
+        return max_action_id, self.q_values[max_action_id]
+
+
 # 行为的定义
 def predict_policy(num):
     # 否则进行预测
@@ -71,8 +98,6 @@ def predict_policy(num):
 # sampled_action = np.random.uniform(min_action, max_action)
 # # 在区间多次采样形成一系列连续的动作
 # actions = [np.random.uniform(min_action, max_action) for _ in range(5)] # 输出[12.013293546568603, 7.62749571011462, 10.509056091831618, 8.048580024330351, 2.8766035953179096]
-# 创建一个 KrNode 实例
-node = KrNode()
 def apply_temperature(self, distribution, temperature=0.5):
     if temperature < 0.1:
         probabilities = np.zeros_like(distribution)
@@ -105,12 +130,10 @@ def prepare_init_actions(node, prediction_p,num_init=4):
         prediction_p += 1.0E-6  # 添加一个小的噪声，防止概率为零
         prediction_p /= prediction_p.sum()  # 重新归一化概率分布
 
-
 # 初始A的确定
 # 处理 actions 列表中的每个元素
 # processed_actions = [a.reshape(1) if isinstance(a, np.ndarray) and a.ndim == 0 else a for a in actions]
 # actions = processed_actions
-
 # 还需要给出简单的policy更新，先让policy network就是预测结果的反应
 # 这里采用target speed的均匀分布
 
@@ -118,52 +141,116 @@ def _selectAction(s, h_s, d, iters):
     s=tuple(s)
     for _ in range(iters):
         _simulate(s, h_s, d)
-    
-    # 需要换成新的评价指标
-    # 需要存储当前状态的A和Q
-    # 先把候选动作和A定义
-    index = np.argmax([Q[(s,tuple(a))] for a in actions])
-    a = actions[index]
-    return a
+    node = state_to_node[s]
+    max_action, _ = node.get_max_q_action()
+    return max_action
 
-# tMaxRollouts设置是否应该和层深度以及6有关
 # 增加候选action的选取
-# 首先研究k(a,b)和w(b)的定义
+def K(a, b, cov_matrix):
+    """
+    高斯核函数，计算动作 a 和 b 之间的相似度，使用协方差矩阵来加权。
+    :param a: 动作 a 的特征。
+    :param b: 动作 b 的特征。
+    :param cov_matrix: 协方差矩阵。
+    :return: 核函数值。
+    """
+    diff = a - b
+    inv_cov = np.linalg.inv(cov_matrix)
+    return np.exp(-0.5 * diff.T @ inv_cov @ diff) / (2 * np.pi * np.linalg.det(cov_matrix))**0.5
+
+def W(a, actions, Nsa, cov_matrix):
+    """
+    计算动作 a 的权重 W(a)，基于高斯核函数。
+    :param a: 当前动作。
+    :param actions: 所有动作的集合。
+    :param Nsa: (状态, 动作) 对应的访问次数。
+    :param cov_matrix: 协方差矩阵。
+    :return: 动作的权重。
+    """
+    weight = 0
+    for b in actions:
+        weight += K(a, b, cov_matrix) * Nsa.get((tuple(a), tuple(b)), 1)  # 默认 Nsa 值为1，避免除零
+    return weight
+
+def E_v_a(a, actions, Q, Nsa, cov_matrix):
+    """
+    计算给定动作 a 的期望价值。
+    :param a: 当前动作。
+    :param actions: 所有动作的集合。
+    :param Q: Q 值字典。
+    :param Nsa: (状态, 动作) 对应的访问次数。
+    :param cov_matrix: 协方差矩阵。
+    :return: 动作 a 的期望价值。
+    """
+    numerator = 0.0
+    denominator = 0.0
+    for b in actions:
+        k_ab = K(a, b, cov_matrix)
+        numerator += k_ab * Q.get((tuple(a), tuple(b)), 0) * Nsa.get((tuple(a), tuple(b)), 1)
+        denominator += k_ab * Nsa.get((tuple(a), tuple(b)), 1)
+    
+    return numerator / (denominator + 1e-5)  # 防止除零错误
+
 def _simulate(s, h_s, d): 
     if d == 0: # we stop exploring the tree, just estimate Qval here
         return _value(s, h_s, d)  #返回的是q
     s=tuple(s)
-    if s not in Tree:
-        Tree.add(s)
+    # 检查状态是否已经存在于字典中
+    if s not in state_to_node:
+        # 如果状态不存在，创建一个新的 KrNode，并添加到字典中
         node = KrNode()
         # 假设我们有一个动作概率分布预测，num_init 为 4
         prediction_p = predict_policy(4)  # 假设预测为 [0.25, 0.25, 0.25, 0.25]
-        prepare_init_actions(node, prediction_p, num_init=4) # 调用 prepare_init_actions 来初始化动作和它们的 Q 值
-        for i in range(len(node.init_actions)):
-            action_id, prob = node.get_init_info(i) # 获得初始化的动作和概率
-            q_value = node.get_q_value(action_id)
+        prepare_init_actions(node, prediction_p, num_init=4)  # 初始化动作和它们的 Q 值
+        # 将新的 KrNode 存入字典
+        state_to_node[s] = node
         return _value(s, h_s,d)
+    else:
+        # 如果状态已经存在，直接获取对应的 KrNode
+        print("why???")
+        node = state_to_node[s]
+    # for i in range(len(node.init_actions)):
+    #     action_id, prob = node.get_init_info(i) # 获得初始化的动作和概率
+    #     q_value = node.get_q_value(action_id)
 
-    # 下面详细看一下W， K ，E的设置
-    qa_tab = ([(Q[(s,tuple(a))]+c*math.sqrt(math.log(Ns[s])/(1e-5 + Nsa[(s,tuple(a))])), a) for a in actions]) # argmax
-    index = np.argmax([t[0] for t in qa_tab])
-    qbest, a =  qa_tab[index]
-    index = np.argmin([t[0] for t in qa_tab])
-    qworst, _ = qa_tab[index]
-    if abs(qbest - qworst) <= .1 or qbest <= -.55: # use exploration constant 1
-        #pdb.set_trace()
-        a = max([(Q[(s,tuple(a))] + 0.35 * math.sqrt(math.log(Ns[s])/(1e-5 + Nsa[(s,tuple(a))])), tuple(a)) for a in actions])# argmax
-        a=a[1]
+    # Step 1: `a' ← argmin_{K(a,b) > γ} W(b)`
+    best_action = None
+    best_w = float('inf')  # 最小化 W(b)
+    actions = node.get_actions()
+    A = [a for a in actions]
+    node.update_cov_matrix(A, num_samples=len(A))
+    for a in actions:
+        for b in A:
+            if K(a, b, node.cov_matrix) > gamma:  # K(a, b) > γ
+                w_b = W(b, actions, Nsa, node.cov_matrix)
+                if w_b < best_w:  # 选择最小的 W(b)
+                    best_w = w_b
+                    best_action = a
+    # Step 2: `A ← A ∪ a'`
+    if best_action is not None:
+        A.append(best_action)
+    # Step 3: `a ← argmax_{a ∈ A} E[\bar{v}_a | a] + C * sqrt(log(∑_{b ∈ A} W(b)) / W(a))`
+    best_value = float('-inf')
+    selected_action = None
+    A = [a for a in actions]
+    node.update_cov_matrix(A, num_samples=len(A))
+    total_w = sum(W(b, actions, Nsa, node.cov_matrix) for b in A)  # ∑_{b ∈ A} W(b)
     
-    if d<=3:
-        print("进行simulate，此时simulate深度为：",d)
-        print("----------------------------------------------------------------------------------")
-
-    sp, h_sp, r = _step(s, h_s, a)
+    for a in A:
+        q_value = E_v_a(a, actions, Q, Nsa, node.cov_matrix)  # 计算期望值
+        exploration_term = c * math.sqrt(math.log(total_w) / (1e-5 + W(a, actions, Nsa, node.cov_matrix)))  # 防止除零
+        value = q_value + exploration_term
+        
+        if value > best_value:
+            best_value = value
+            selected_action = a
+    
+    sp, h_sp, r = _step(s, h_s, selected_action)
     q = r + discount * _simulate(sp,h_sp, d-1)
-    Nsa[(s,tuple(a))] += 1
+    Nsa[(s,tuple(selected_action))] += 1
     Ns[s] += 1
-    Q[(s,tuple(a))] += (q-Q[(s,tuple(a))])/Nsa[(s,tuple(a))]
+    new_q_value = (q-node.get_q_value(selected_action))/Nsa[(s,tuple(selected_action))]
+    node.update_q_value(selected_action, new_q_value)
     return q
 
 # rollout替换为直接评估方法
@@ -405,8 +492,9 @@ if __name__ == '__main__':
     # 输入的参数定义
 
     Q={}
+    # 创建一个字典用于存储状态对应的 KrNode
+    state_to_node = {}
     Tree=set()
-    node = set()
     Nsa = {}
     Ns = {}
     # tMaxRollouts=10 #10 #200
