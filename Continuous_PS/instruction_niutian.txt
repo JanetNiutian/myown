@@ -1,0 +1,57 @@
+由两大部分组成：
+QCNet；
+MCTS guided by prediction。
+
+QCNet参照 https://github.com/ZikangZhou/QCNet
+MCTS受 https://github.com/PhilippeW83440/MCTS-NNET 启发
+
+一、QCNet
+QCNet包含文件夹：
+_pycache
+.idea
+.vs
+assets
+av2  # 源自数据集argoverse 2 https://github.com/argoverse/av2-api?tab=readme-ov-file motion forcasting
+av2-api-main # 源自数据集argoverse 2 https://github.com/argoverse/av2-api?tab=readme-ov-file motion forcasting
+checkpoints_for_QCNet
+datamodules
+datasets
+layers
+losses
+metrics
+modules
+predictors
+transforms
+utils
+
+QCNet还包含文件：
+_init_._pycache
+test._py
+train_qcnet.py
+val.py
+
+QCNet相关文件具体含义及使用方法见https://github.com/ZikangZhou/QCNet
+
+二、MCTS guided by prediction，简称PS
+对应论文 https://arxiv.org/abs/2411.09887， 简称PS
+
+当前代码只以argoverse 2中场景'3c375e5e-c981-4e7d-9da0-c4d8e3a8fc24'为例，简称scene_7
+主要文件为full_rollout_7，python ~/Continuous_PS/full_route_7.py 既可获得scene_7可视化效果：根据5s的历史，自车不断决策出未来6s的场景。选取的action储存在~/chosed_actions_7.pkl中，具体路径可在~/full_route_7.py中定义。
+
+下面是所有相关文件的解释：
+continuous_ps_test.py 用于下一步要进行的“动作集合是连续的”
+cost_func.py PS中动作好坏的评估
+
+cubic_spline_planner.py
+frenet_optimal_trajectory.py
+这两个用于frenet planning产生初始轨迹，参考 https://github.com/ChenBohan/Robotics-Path-Planning-04-Quintic-Polynomial-Solver
+
+get_data_for_val.py
+val_for_MCTS.py
+这两个用于和预测网络QCNet接轨
+
+full_route_7_visual.py
+parallel_mp4_scene7.py
+这两个用于可视化
+
+
