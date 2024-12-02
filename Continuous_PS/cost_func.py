@@ -39,13 +39,12 @@ def get_details_original(forecasted_all,nobjs):
 
 def get_details_continuous(history_state,nobjs):
     # history_state是data【nobjs,110,3】的形式
-
     # 提取 x 轴位置、y 轴位置、转向角、x 轴速度、y 轴速度
-    x = np.transpose(history_state['agent']['position'][:, 40:50, 0], (1, 0, 2)) # 交换第 1 和第 0 维度
-    y = np.transpose(history_state['agent']['position'][:, 40:50, 1], (1, 0, 2))
-    v_x = np.transpose(history_state['agent']['velocity'][:, 40:50, 0], (1, 0, 2))
-    v_y = np.transpose(history_state['agent']['velocity'][:, 40:50, 1], (1, 0, 2))
-    delta = np.transpose(history_state['agent']['heading'][:, 40:50], (1, 0, 2))
+    x = np.transpose(history_state['agent']['position'][:, 40:50, 0], (1, 0)) # 交换第 1 和第 0 维度  维度从（19，10）变为（10，19）
+    y = np.transpose(history_state['agent']['position'][:, 40:50, 1], (1, 0))
+    v_x = np.transpose(history_state['agent']['velocity'][:, 40:50, 0], (1, 0))
+    v_y = np.transpose(history_state['agent']['velocity'][:, 40:50, 1], (1, 0))
+    delta = np.transpose(history_state['agent']['heading'][:, 40:50], (1, 0))
 
     # 计算加速度
     # 假设加速度是通过速度变化率计算得到的
@@ -67,8 +66,64 @@ def get_details_continuous(history_state,nobjs):
     return alpha, delta, dot_y, x, y, delta_x, delta_y
 
 
+def cost_all(history_state,nobjs):
+
+    alpha, delta, dot_y, x, y, delta_x, delta_y = get_details_continuous(history_state,nobjs)
+
+    # 参数
+    v0 = 31  #15
+    W = 3.7
+    w = 2.0
+    bar_alpha = 4
+    bar_alpha_neg = -5
+    k4 = 15.0
+    k6 = 3.0
+    k7_x = 2.0
+    k7_y = 20.0
+    k8_x = 5.0
+    k8_y = 20.0
+    l7_x = 1.0
+    l7_y = 1.0
+    l8_x = 10.0
+    l8_y = 2.0
+
+    # 权重
+    weights = np.array([1.0, 0.01, -1.5, 1.0, -0.3, -24.0, -2.0, -14.0])
+
+    # 效用函数
+    phi1 = 1 - ((np.transpose(history_state['agent']['heading'][:, 40:50], (1, 0)) - v0) / v0) ** 2
+    phi1 = np.array(phi1) 
+    phi2 = (alpha - np.roll(alpha, 1, axis=0)) ** 2
+    phi3 = (delta - np.roll(delta, 1, axis=0)) ** 2
+    phi3 = np.array(phi3) 
+    phi4 = np.log(1 + np.exp(k4 * (alpha - bar_alpha))) + np.log(1 + np.exp(-k4 * (alpha - bar_alpha_neg)))
+    # phi5 = np.minimum((dot_y - (W / 2) ** 2) / (3 * W ** 4 / 4), 1)
+    # phi6 = 1 / (1 + np.exp(-k6 * (y - (W + w / 2))))
+    # phi7 = 1 / (1 + np.exp(-k7_x * (x + l7_x))) * 1 / (1 + np.exp(-k7_y * (dot_y - l7_y)))
+    # 限制 exponent 的输入范围在 [-500, 500] 之间，避免溢出
+    exp_input_x = np.clip(-k8_x * (delta_x - l8_x), -500, 500)
+    exp_input_y = np.clip(-k8_y * (delta_y - l8_y), -500, 500)
+    phi8 = 1 / (1 + np.exp(exp_input_x)) + 1 / (1 + np.exp(exp_input_y))
+    # phi8 = 1 / (1 + np.exp(-k8_x * (delta_x - l8_x))) + 1 / (1 + np.exp(-k8_y * (delta_y - l8_y)))
+        # 检查是否有无效值 NaN 或 Inf
+    if (np.isnan(phi1).any() or np.isinf(phi1).any() or
+        np.isnan(phi2).any() or np.isinf(phi2).any() or
+        np.isnan(phi3).any() or np.isinf(phi3).any() or
+        np.isnan(phi4).any() or np.isinf(phi4).any() or
+        np.isnan(phi8).any() or np.isinf(phi8).any() or
+        np.isnan(weights).any() or np.isinf(weights).any()):
+        
+        print("Invalid value encountered in the input data.")
+        return np.nan  # 直接返回 NaN 或者标记无效值
+
+    # 总成本函数
+    cost = np.sum(weights[0] * phi1 + weights[1] * phi2 + weights[2] * phi3 + weights[3] * phi4 + weights[7] * phi8)
+    # + weights[4] * phi5 + weights[5] * phi6 + weights[6] * phi7
+
+    return cost
+
 # 缺少偏移车道线那项
-def cost_all(forecasted_all,nobjs):
+def cost_all_original(forecasted_all,nobjs):
 
     alpha, delta, dot_y, x, y, delta_x, delta_y = get_details_continuous(forecasted_all,nobjs)
 

@@ -300,7 +300,7 @@ class QCNet(pl.LightningModule): #继承类pl.LightningModule
         # self.log('val_MR', self.MR, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
 
         # print("调用了validation")
-        f_read = open('/home/niutian/原data/QCNet_result/data_new_01.pkl', 'rb')
+        f_read = open('/home/niutian/myown/intermediate_results/con_ps/data_new_01.pkl', 'rb')
         #f_read = open("/data/niutian/QCNet_MCTS_data/groundtruth_val_01.pkl", 'rb')
         data_new = pickle.load(f_read)
 
@@ -316,7 +316,7 @@ class QCNet(pl.LightningModule): #继承类pl.LightningModule
     
         #return pred
         
-        f_save = open('/home/niutian/原data/QCNet_result/pred_for_MCTS_01.pkl', 'wb')  #new
+        f_save = open('/home/niutian/myown/intermediate_results/con_ps/pred_for_MCTS_01.pkl', 'wb')  #new
         #f_save = open('/data/niutian/QCNet_MCTS_data/pred_val_01.pkl', 'wb')
         pickle.dump(pred, f_save)
    

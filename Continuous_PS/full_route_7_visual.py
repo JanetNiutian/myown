@@ -87,7 +87,7 @@ def get_inf_for_vis(ego_state_all,nobjs):#
            #ego_action_position,ego_action_velocity,ego_action_heading
 
 def visualization(ego_state_all,nobjs):
-    save_path=Path('/home/niutian/原data/QCNet_MCTS_result/cv_7')
+    save_path=Path('/home/niutian/myown/intermediate_results/con_ps/cv_7')
     scenario,scenario_static_map,his_trajectory,gt_trajectory=get_inf_for_vis(ego_state_all,nobjs)
     visualize_scenario(scenario,scenario_static_map,his_trajectory,gt_trajectory,save_path,nobjs)
 

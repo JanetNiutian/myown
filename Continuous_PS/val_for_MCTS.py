@@ -26,7 +26,7 @@ class CallingCounter(object):
         self.count += 1
         return self.func(*args, **kwargs)
 
-model = {'QCNet': QCNet,}['QCNet'].load_from_checkpoint(checkpoint_path='/home/niutian/原data/checkpoints_for_QCNet/QCNet_AV2.ckpt')
+model = {'QCNet': QCNet,}['QCNet'].load_from_checkpoint(checkpoint_path='/home/niutian/myown/Continuous_PS/checkpoints_for_QCNet/QCNet_AV2.ckpt')
 val_dataset = {'argoverse_v2': ArgoverseV2Dataset,}[model.dataset](root='/home/niutian/原data/Argoverse 2 Motion Forecasting Dataset single', split='val',transform=TargetBuilder(model.num_historical_steps, model.num_future_steps))
 dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=8,pin_memory=False, persistent_workers=True)
 trainer = pl.Trainer(accelerator='gpu', devices=1)#, strategy='ddp')
@@ -36,12 +36,12 @@ trainer = pl.Trainer(accelerator='gpu', devices=1)#, strategy='ddp')
 def qc_for_state (input):
 
     data_new=input
-    f_save = open('/home/niutian/原data/QCNet_result/data_new_01.pkl', 'wb')  #new
+    f_save = open('/home/niutian/myown/intermediate_results/con_ps/data_new_01.pkl', 'wb')  #new
     pickle.dump(data_new, f_save)
 
     #with torch.no_grad(): 主要是为了防止出现cuda out of memory但是不确定是否有用
     trainer.validate(model, dataloader)
-    f_read = open('/home/niutian/原data/QCNet_result/pred_for_MCTS_01.pkl', 'rb')
+    f_read = open('/home/niutian/myown/intermediate_results/con_ps/pred_for_MCTS_01.pkl', 'rb')
     pred = pickle.load(f_read)
     #print(pred[0]) #返回{}
     return pred

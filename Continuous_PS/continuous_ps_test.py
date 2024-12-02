@@ -98,7 +98,7 @@ def predict_policy(num):
 # sampled_action = np.random.uniform(min_action, max_action)
 # # 在区间多次采样形成一系列连续的动作
 # actions = [np.random.uniform(min_action, max_action) for _ in range(5)] # 输出[12.013293546568603, 7.62749571011462, 10.509056091831618, 8.048580024330351, 2.8766035953179096]
-def apply_temperature(self, distribution, temperature=0.5):
+def apply_temperature(distribution, temperature=0.5):
     if temperature < 0.1:
         probabilities = np.zeros_like(distribution)
         probabilities[np.argmax(distribution)] = 1.0
@@ -106,6 +106,7 @@ def apply_temperature(self, distribution, temperature=0.5):
         log_probabilities = np.log(distribution) / temperature
         probabilities = np.exp(log_probabilities - log_probabilities.max())
         probabilities /= probabilities.sum()
+    # print("probabilities:",probabilities)
     return probabilities
 def prepare_init_actions(node, prediction_p,num_init=4):
     # factor 用于调整每个初始化动作的概率。每选择一个新的初始化动作时，factor 会乘以一个系数，确保后续选择的动作概率递减，避免过度集中在少数几个动作上。
@@ -116,7 +117,8 @@ def prepare_init_actions(node, prediction_p,num_init=4):
     for _ in range(num_init):
         # 从预测的概率分布中选择一个初始化动作
         # 这一行从 prediction_p 中选择一个动作索引，prediction_p 是一个包含所有可能动作的概率分布。self.apply_temperature()：是一个温度函数，用来调整概率分布的平滑程度，self.init_temperature 控制这个温度。温度调节越低，选择的动作越集中；温度越高，选择的动作越随机。
-        init_action_id = np.random.choice(len(prediction_p), p=apply_temperature(prediction_p))
+        # print("prediction_p:",prediction_p)
+        init_action_id = np.random.choice(len(prediction_p), p=apply_temperature(prediction_p,0.5))
         init_action_prob = prediction_p[init_action_id]
         # 更新因子，避免重复选择
         # 每选择一个动作，更新因子 factor，确保选择动作的概率逐渐降低，避免重复选择。prev_init_action_prob 是前一个动作的概率，1.0 - prev_init_action_prob 保证了后续动作的选择概率会随着选择的动作数量增加而递减。
@@ -207,7 +209,6 @@ def _simulate(s, h_s, d):
         return _value(s, h_s,d)
     else:
         # 如果状态已经存在，直接获取对应的 KrNode
-        print("why???")
         node = state_to_node[s]
     # for i in range(len(node.init_actions)):
     #     action_id, prob = node.get_init_info(i) # 获得初始化的动作和概率
@@ -218,7 +219,10 @@ def _simulate(s, h_s, d):
     best_w = float('inf')  # 最小化 W(b)
     actions = node.get_actions()
     A = [a for a in actions]
+    print("A:",A)
     node.update_cov_matrix(A, num_samples=len(A))
+    # print(type(node.cov_matrix))  # 打印 cov_matrix 的类型
+    # print((node.cov_matrix).shape)  # 打印 cov_matrix 的形状
     for a in actions:
         for b in A:
             if K(a, b, node.cov_matrix) > gamma:  # K(a, b) > γ
@@ -499,7 +503,7 @@ if __name__ == '__main__':
     Ns = {}
     # tMaxRollouts=10 #10 #200
     d=6 #30 #12
-    iters=100 #50 #100
+    iters=3 #50 #100
     max_t = 60 
     discount=1
     explorConst=1.0
@@ -527,11 +531,11 @@ if __name__ == '__main__':
 
     print(metric_runtime,"\n",chosed_actions,"\n",ego_state_all)
     print(f"QCNet被调用了:{qc_for_state.count}次")
-    f_save = open('/home/niutian/原data/QCNet_MCTS_result/metric_runtime_7.pkl', 'wb')  #new
+    f_save = open('/home/niutian/myown/intermediate_results/con_ps/metric_runtime_7.pkl', 'wb')  #new
     pickle.dump(metric_runtime, f_save)
-    f_save = open('/home/niutian/原data/QCNet_MCTS_result/ego_state_all_7.pkl', 'wb')  #new
+    f_save = open('/home/niutian/myown/intermediate_results/con_ps/ego_state_all_7.pkl', 'wb')  #new
     pickle.dump(ego_state_all, f_save)
-    f_save = open('/home/niutian/原data/QCNet_MCTS_result/chosed_actions_7.pkl', 'wb')  #new
+    f_save = open('/home/niutian/myown/intermediate_results/con_ps/chosed_actions_7.pkl', 'wb')  #new
     pickle.dump(chosed_actions, f_save)
 
     
@@ -553,4 +557,4 @@ if __name__ == '__main__':
 
     # conda activate QCNet
     # cd /home/niutian/原data/code/QCNet-main-scene7
-    # CUDA_VISIBLE_DEVICES=2 python3 /home/niutian/原data/code/QCNet-main-scene7/full_route_7.py
+    # CUDA_VISIBLE_DEVICES=2 python3 /home/niutian/myown/Continuous_PS/continuous_ps_test.py
